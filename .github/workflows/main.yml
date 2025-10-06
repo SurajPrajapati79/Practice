@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-      
+
 jobs:
   lint_and_test:
     runs-on: ubuntu-latest
@@ -21,13 +21,17 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 black mypy
+          pip install black mypy ruff
 
-      - name: Run Black (code formatting check)
-        run: black --check .
+      # Show Black formatting diffs in logs
+      - name: Run Black (show required changes)
+        run: black --check --diff .
 
-      - name: Run Flake8 (linting)
-        run: flake8 .
+      # Ruff replaces Flake8 and adds inline GitHub annotations
+      - name: Run Ruff (linting with inline annotations)
+        run: |
+          ruff check . --output-format=github
 
+      # Type checking with Mypy
       - name: Run Mypy (type checking)
         run: mypy .
