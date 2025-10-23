@@ -1,13 +1,15 @@
+# .github/workflows/codeQuality.yml
+
 name: Project Quality Check
 
 on:
   push:
-    branches: ["main"]
+    branches: ["Dev"]
   pull_request:
-    branches: ["mainn"]
+    branches: ["Dev"]
 
 jobs:
-  call-quality-checker:
+  run-shared-quality-check:
     uses: SurajPrajapati79/Code-Quality-Check/.github/workflows/main.yml@main
     with:
       backend_dir: "backend"
