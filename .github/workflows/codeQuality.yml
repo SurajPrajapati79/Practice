@@ -8,7 +8,7 @@ on:
 
 jobs:
   call-quality-checker:
-    uses: your-org/central-repo/.github/workflows/fullstack-quality.yml@main
+    uses: SurajPrajapati79/Code-Quality-Check/.github/workflows/main.yml@main
     with:
       backend_dir: "backend"
       frontend_dir: "frontend"
