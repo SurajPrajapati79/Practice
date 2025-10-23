@@ -2,7 +2,7 @@
 
 name: Project Quality Check
 
-on:
+on: 
   push:
     branches: ["Dev"]
   pull_request:
