@@ -188,14 +188,3 @@ jobs:
                     rm -f eslint.config.js
                   fi
                   echo "ESLint check (including unused variable/import rules) completed."
-            ];
-            EOF
-
-                echo "Running ESLint with temporary configuration..."
-                npx eslint . -f stylish --max-warnings=0
-    
-                echo "Cleaning up temporary configuration..."
-                rm -f eslint.config.js
-              fi
-
-          echo "ESLint check (including unused variable/import rules) completed."
