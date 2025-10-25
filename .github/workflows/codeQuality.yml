@@ -1,16 +1,42 @@
 name: Full Stack Quality Checker
 
 on:
+  workflow_call:
+    inputs:
+      branch:
+        description: 'Branch to run checks on'
+        required: false
+        default: 'Dev'
+        type: string
+      backend_path:
+        description: 'Path to backend folder'
+        required: false
+        default: '.'
+        type: string
+      frontend_path:
+        description: 'Path to frontend folder'
+        required: false
+        default: 'Frontend'
+        type: string
+      lockfile_paths:
+        description: 'Paths to frontend lock files (comma-separated)'
+        required: false
+        default: 'Frontend/package-lock.json,Frontend/yarn.lock,Frontend/pnpm-lock.yaml'
+        type: string
+
   push:
-    branches: ["Dev"]        # Runs on all branches
+    branches: ["${{ inputs.branch }}"]
   pull_request:
-    branches: ["Dev"]
+    branches: ["${{ inputs.branch }}"]
 
 jobs:
-  # Backend Quality Check
   backend-quality:
     name: Python Backend Quality Check
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.backend_path }}
 
     steps:
       - name: Checkout repository
@@ -41,52 +67,48 @@ jobs:
           ruff format --check .
           echo "Format check complete."
 
-      - name: Run Pytest (basic validation)
+      - name: Run Pytest
         run: |
           echo "Running backend tests..."
-          pytest -q || echo "::warning::Some tests failed."
+          pytest -q
           echo "Backend testing complete."
 
-
-  # Frontend Quality Check
   frontend-quality:
     name: Frontend Quality Check
     runs-on: ubuntu-latest
-    if: always()   # runs even if backend fails
-  
+    if: success()  # Stop if backend fails (no 'always()')
+
     defaults:
       run:
-        working-directory: Frontend
-  
+        working-directory: ${{ inputs.frontend_path }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-  
+
       - name: Detect package manager
         id: detect
         run: |
-          if [ -f package-lock.json ]; then
+          LOCKFILES="${{ inputs.lockfile_paths }}"
+          if echo "$LOCKFILES" | grep -q "package-lock.json" && [ -f package-lock.json ]; then
             echo "PACKAGE_MANAGER=npm" >> $GITHUB_ENV
-          elif [ -f yarn.lock ]; then
+          elif echo "$LOCKFILES" | grep -q "yarn.lock" && [ -f yarn.lock ]; then
             echo "PACKAGE_MANAGER=yarn" >> $GITHUB_ENV
-          elif [ -f pnpm-lock.yaml ]; then
+          elif echo "$LOCKFILES" | grep -q "pnpm-lock.yaml" && [ -f pnpm-lock.yaml ]; then
             echo "PACKAGE_MANAGER=pnpm" >> $GITHUB_ENV
           else
             echo "PACKAGE_MANAGER=none" >> $GITHUB_ENV
           fi
           echo "Detected package manager: $PACKAGE_MANAGER"
-  
-      - name: Setup Node (if Node project)
+
+      - name: Setup Node
         if: env.PACKAGE_MANAGER != 'none'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: ${{ env.PACKAGE_MANAGER }}
-          cache-dependency-path: |
-            Frontend/package-lock.json
-            Frontend/yarn.lock
-            Frontend/pnpm-lock.yaml
-  
+          cache-dependency-path: ${{ inputs.lockfile_paths }}
+
       - name: Install dependencies
         if: env.PACKAGE_MANAGER != 'none'
         run: |
@@ -97,74 +119,64 @@ jobs:
             pnpm) pnpm install ;;
           esac
           echo "Frontend dependencies installed."
-  
+
       - name: Run TypeScript check (if tsconfig.json exists)
         run: |
           if [ -f tsconfig.json ]; then
             echo "Running TypeScript type checks..."
             case $PACKAGE_MANAGER in
-              npm) npm run check || echo "::warning::TypeScript type issues found.";;
-              yarn) yarn run check || echo "::warning::TypeScript type issues found.";;
-              pnpm) pnpm run check || echo "::warning::TypeScript type issues found.";;
+              npm) npm run check ;;
+              yarn) yarn run check ;;
+              pnpm) pnpm run check ;;
             esac
             echo "TypeScript check complete."
           else
             echo "No tsconfig.json found — skipping TypeScript checks."
           fi
-  
+
       - name: Build frontend
         run: |
           echo "Building frontend..."
           case $PACKAGE_MANAGER in
-            npm) npm run build;;
-            yarn) yarn run build;;
-            pnpm) pnpm run build;;
+            npm) npm run build ;;
+            yarn) yarn run build ;;
+            pnpm) pnpm run build ;;
           esac
-          echo "Build completed (or partially)."
-  
+          echo "Build completed."
+
       - name: Run ESLint (check for unused variables/imports)
         run: |
           echo "Checking ESLint configuration..."
           if ls eslint.config.* .eslintrc* 1> /dev/null 2>&1; then
-            echo "ESLint configuration found — running with project settings."
+            echo "ESLint configuration found — running lint..."
             case $PACKAGE_MANAGER in
-              npm) npm run lint;;
-              yarn) yarn run lint;;
-              pnpm) pnpm run lint;;
+              npm) npm run lint ;;
+              yarn) yarn run lint ;;
+              pnpm) pnpm run lint ;;
             esac
           else
-            echo "No ESLint configuration found — running default code quality checks."
-            echo "Installing ESLint and required plugins temporarily..."
+            echo "No ESLint configuration found — using default rules."
             npm install --no-save eslint eslint-plugin-unused-imports > /dev/null 2>&1 || true
-  
-            echo "Creating temporary ESLint configuration for CI..."
-          cat << 'EOF' > eslint.config.js
-          import unusedImports from "eslint-plugin-unused-imports";
-          export default [
-            {
-              files: ["**/*.{js,jsx,ts,tsx}"],
-              languageOptions: {
-                ecmaVersion: 2020,
-                sourceType: "module",
+
+            cat << 'EOF' > eslint.config.js
+            import unusedImports from "eslint-plugin-unused-imports";
+            export default [
+              {
+                files: ["**/*.{js,jsx,ts,tsx}"],
+                languageOptions: { ecmaVersion: 2020, sourceType: "module" },
+                plugins: { "unused-imports": unusedImports },
+                rules: {
+                  "no-unused-vars": ["error"],
+                  "no-undef": ["error"],
+                  "no-console": ["warn"],
+                  "no-debugger": ["warn"],
+                  "unused-imports/no-unused-imports": ["error"]
+                },
               },
-              plugins: {
-                "unused-imports": unusedImports,
-              },
-              rules: {
-                "no-unused-vars": ["error"],
-                "no-undef": ["error"],
-                "no-console": ["warn"],
-                "no-debugger": ["warn"],
-                "unused-imports/no-unused-imports": ["error"]
-              },
-            },
-          ];
-          EOF
-          
-                    echo "Running ESLint with temporary configuration..."
-                    npx eslint . -f stylish --max-warnings=0
-          
-                    echo "Cleaning up temporary configuration..."
-                    rm -f eslint.config.js
-                  fi
-                  echo "ESLint check (including unused variable/import rules) completed."
+            ];
+            EOF
+
+            npx eslint . -f stylish --max-warnings=0
+            rm -f eslint.config.js
+          fi
+          echo "ESLint check completed."
