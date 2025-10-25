@@ -148,42 +148,54 @@ jobs:
           if ls eslint.config.* .eslintrc* 1> /dev/null 2>&1; then
             echo "ESLint configuration found — running with project settings."
             case $PACKAGE_MANAGER in
-              npm) npm run lint ;;
-              yarn) yarn run lint ;;
-              pnpm) pnpm run lint ;;
+              npm) npm run lint;;
+              yarn) yarn run lint;;
+              pnpm) pnpm run lint;;
             esac
           else
-            echo "No ESLint configuration found — running default ESLint checks."
+            echo "No ESLint configuration found — running default code quality checks."
+            echo "Installing ESLint and required plugins temporarily..."
             npm install --no-save eslint eslint-plugin-unused-imports > /dev/null 2>&1 || true
-
-            cat << 'EOF' > eslint.config.js
-            import unusedImports from "eslint-plugin-unused-imports";
-            export default [
-              {
-                files: ["**/*.{js,jsx,ts,tsx}"],
-                languageOptions: {
-                  ecmaVersion: 2020,
-                  sourceType: "module",
-                },
-                plugins: {
-                  "unused-imports": unusedImports,
-                },
-                rules: {
-                  "no-unused-vars": ["error"],
-                  "no-undef": ["error"],
-                  "no-console": ["warn"],
-                  "no-debugger": ["warn"],
-                  "unused-imports/no-unused-imports": ["error"]
-                },
+  
+            echo "Creating temporary ESLint configuration for CI..."
+          cat << 'EOF' > eslint.config.js
+          import unusedImports from "eslint-plugin-unused-imports";
+          export default [
+            {
+              files: ["**/*.{js,jsx,ts,tsx}"],
+              languageOptions: {
+                ecmaVersion: 2020,
+                sourceType: "module",
               },
+              plugins: {
+                "unused-imports": unusedImports,
+              },
+              rules: {
+                "no-unused-vars": ["error"],
+                "no-undef": ["error"],
+                "no-console": ["warn"],
+                "no-debugger": ["warn"],
+                "unused-imports/no-unused-imports": ["error"]
+              },
+            },
+          ];
+          EOF
+          
+                    echo "Running ESLint with temporary configuration..."
+                    npx eslint . -f stylish --max-warnings=0
+          
+                    echo "Cleaning up temporary configuration..."
+                    rm -f eslint.config.js
+                  fi
+                  echo "ESLint check (including unused variable/import rules) completed."
             ];
             EOF
 
-            echo "Running ESLint with temporary configuration..."
-            npx eslint . -f stylish --max-warnings=0
-
-            echo "Cleaning up temporary configuration..."
-            rm -f eslint.config.js
-          fi
+                echo "Running ESLint with temporary configuration..."
+                npx eslint . -f stylish --max-warnings=0
+    
+                echo "Cleaning up temporary configuration..."
+                rm -f eslint.config.js
+              fi
 
           echo "ESLint check (including unused variable/import rules) completed."
